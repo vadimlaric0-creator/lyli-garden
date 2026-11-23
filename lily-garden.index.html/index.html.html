@@ -1,0 +1,1005 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Lily Garden — 3D ASCII Art</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background-color: #000000;
+      overflow: hidden;
+      font-family: 'Inter', sans-serif;
+      color: #f3e8ff;
+    }
+    #ascii-canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: grab;
+      touch-action: none;
+    }
+    #ascii-canvas:active {
+      cursor: grabbing;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    /* Custom subtle range slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.14);
+      height: 4px;
+      border-radius: 999px;
+      outline: none;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #f09bd2;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(240, 155, 210, 0.7);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+      background: #ffffff;
+    }
+    input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border: none;
+      border-radius: 50%;
+      background: #f09bd2;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(240, 155, 210, 0.7);
+    }
+    .glass-panel {
+      background: rgba(12, 10, 18, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.75);
+    }
+  </style>
+</head>
+<body>
+  <!-- Full-screen 3D ASCII Canvas -->
+  <canvas id="ascii-canvas"></canvas>
+
+  <!-- Minimalist Top Header Badge -->
+  <div id="top-hud" class="fixed top-4 left-4 right-4 flex items-center justify-between pointer-events-none z-20 transition-opacity duration-500">
+    <div class="glass-panel rounded-full px-4 py-2 flex items-center gap-2.5 pointer-events-auto">
+      <span class="w-2 h-2 rounded-full bg-pink-400 animate-pulse shadow-[0_0_8px_#f472b6]"></span>
+      <span class="mono text-xs sm:text-sm font-semibold tracking-wider text-white">lily_garden.py</span>
+      <span class="hidden sm:inline text-xs text-white/40">|</span>
+      <span id="fps-badge" class="hidden sm:inline mono text-[11px] text-white/50">60 FPS</span>
+    </div>
+
+    <div class="flex items-center gap-2 pointer-events-auto">
+      <button id="btn-code" title="Показать параметрическую математику" class="glass-panel hover:bg-white/10 active:scale-95 transition-all rounded-full px-3.5 py-2 text-xs mono text-white/80 hover:text-white flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-pink-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+        </svg>
+        <span class="hidden sm:inline">Formula</span>
+      </button>
+
+      <button id="btn-replay" title="Перезапустить плавное появление" class="glass-panel hover:bg-white/10 active:scale-95 transition-all rounded-full p-2 text-white/80 hover:text-white">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+      </button>
+
+      <button id="btn-toggle-ui" title="Скрыть/показать интерфейс" class="glass-panel hover:bg-white/10 active:scale-95 transition-all rounded-full p-2 text-white/80 hover:text-white">
+        <svg id="icon-eye" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Floating Bottom Controls Panel -->
+  <div id="bottom-controls" class="fixed bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-2xl z-20 transition-all duration-500">
+    <div class="glass-panel rounded-2xl p-3.5 sm:p-4 flex flex-col gap-3.5">
+      <!-- Palette Pills -->
+      <div class="flex items-center justify-between gap-2 overflow-x-auto pb-0.5 no-scrollbar">
+        <span class="text-[11px] uppercase tracking-wider text-white/45 font-medium shrink-0">Палитра:</span>
+        <div class="flex items-center gap-1.5" id="palette-buttons">
+          <button data-palette="mixed" class="palette-btn active px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-white/15 text-white border border-pink-400/50 shadow-[0_0_12px_rgba(240,155,210,0.25)] shrink-0">
+            ✦ Astra Bouquet
+          </button>
+          <button data-palette="violet" class="palette-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-white/70 border border-transparent shrink-0">
+            Twilight Violet
+          </button>
+          <button data-palette="cyan" class="palette-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-white/70 border border-transparent shrink-0">
+            Midnight Cyan
+          </button>
+          <button data-palette="crimson" class="palette-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-white/70 border border-transparent shrink-0">
+            Crimson Blush
+          </button>
+          <button data-palette="gold" class="palette-btn px-3 py-1.5 rounded-xl text-xs font-medium transition-all bg-white/5 hover:bg-white/10 text-white/70 border border-transparent shrink-0">
+            Golden Aura
+          </button>
+        </div>
+      </div>
+
+      <!-- Sliders & Density Row -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center pt-1 border-t border-white/10">
+        <!-- Wind Speed -->
+        <div class="flex flex-col gap-1">
+          <div class="flex justify-between text-[11px] text-white/60">
+            <span>Ветер / Колыхание</span>
+            <span id="wind-val" class="mono text-pink-300">1.0x</span>
+          </div>
+          <input id="wind-slider" type="range" min="0" max="2.5" step="0.1" value="1.0" />
+        </div>
+
+        <!-- Bloom Openness -->
+        <div class="flex flex-col gap-1">
+          <div class="flex justify-between text-[11px] text-white/60">
+            <span>Раскрытие бутонов</span>
+            <span id="bloom-val" class="mono text-pink-300">100%</span>
+          </div>
+          <input id="bloom-slider" type="range" min="0.55" max="1.35" step="0.05" value="1.0" />
+        </div>
+
+        <!-- ASCII Grid Density -->
+        <div class="flex items-center justify-between sm:justify-end gap-1.5">
+          <span class="text-[11px] text-white/55 mr-1">Сетка:</span>
+          <button data-density="fine" class="density-btn px-2.5 py-1 rounded-lg text-[11px] mono bg-white/5 hover:bg-white/10 text-white/65 transition-all">Fine</button>
+          <button data-density="medium" class="density-btn active px-2.5 py-1 rounded-lg text-[11px] mono bg-white/20 text-white border border-white/25 transition-all">Med</button>
+          <button data-density="retro" class="density-btn px-2.5 py-1 rounded-lg text-[11px] mono bg-white/5 hover:bg-white/10 text-white/65 transition-all">Retro</button>
+        </div>
+      </div>
+
+      <!-- Subtle Gesture Hint -->
+      <div class="text-center text-[10px] text-white/35 tracking-wide">
+        Потяните мышью или пальцем, чтобы вращать 3D-букет • Колёсико для масштаба
+      </div>
+    </div>
+  </div>
+
+  <!-- Parametric Code / Info Modal -->
+  <div id="code-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-40 hidden items-center justify-center p-4">
+    <div class="glass-panel rounded-2xl max-w-xl w-full p-5 sm:p-6 flex flex-col gap-4 border border-white/15">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-pink-400"></span>
+          <h2 class="mono text-sm sm:text-base font-semibold text-white">lily_garden.py — Parametric Engine</h2>
+        </div>
+        <button id="btn-close-modal" class="text-white/60 hover:text-white p-1 rounded-lg hover:bg-white/10 transition">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <p class="text-xs sm:text-sm text-white/70 leading-relaxed">
+        Каждый лепесток лилии строится в реальном времени как параметрическая 3D-поверхность <span class="mono text-pink-300">P(u, v)</span> с синусоидальным изгибом, центральной прожилкой, закручиванием кончиков и Z-буфером, преобразующим освещённость нормалей в плотность ASCII-символов.
+      </p>
+      <pre class="mono text-[11px] sm:text-xs bg-black/70 border border-white/10 rounded-xl p-3.5 overflow-x-auto text-emerald-300/90 leading-relaxed"><code>def petal(self, angle, u, v, t):
+    bloom = self.bloom + 0.12 * sin(0.65 * t + self.phase)
+    spread = (0.30 + 1.12 * bloom) * u
+    width  = 0.31 * sin(pi * u)**0.75 * (1 - 0.60 * u)
+    ridge  = 0.105 * sin(pi * u)
+    curl   = 0.30 * max(0, u - 0.60)**2.5
+    height = (ridge * (1 - v*v) - 0.13 * v*v * sin(pi*u) + curl)
+    # Normal lighting -> ASCII luminance ramp
+    ramp = " .:-=+*#%@"</code></pre>
+      <div class="flex justify-end">
+        <button id="btn-close-modal-2" class="px-4 py-2 rounded-xl bg-pink-500/25 hover:bg-pink-500/40 border border-pink-400/40 text-xs font-medium text-white transition">
+          Вернуться к букету
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * 3D Parametric ASCII Lily Garden Engine
+     * Faithfully recreates the parametric 3D lily bouquet with Z-buffer occlusion,
+     * normal-based diffuse + rim lighting, petal freckles, golden stamens, and twinkling ASCII stars.
+     */
+    (function () {
+      const canvas = document.getElementById('ascii-canvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      // ASCII Character Ramp ordered by visual density (darkest to brightest)
+      const RAMP = " .'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
+      const RAMP_LEN = RAMP.length;
+
+      // Color Palettes matching the aesthetic in the video
+      // Each stop: [u_position, [r, g, b]]
+      const PALETTES = {
+        // Signature Violet & Rose (deep indigo base -> vivid orchid -> soft pastel rose-white tip)
+        violet: [
+          [0.00, [110, 20, 95]],
+          [0.28, [185, 55, 145]],
+          [0.62, [245, 145, 215]],
+          [1.00, [255, 225, 245]]
+        ],
+        // Midnight Cyan & Lavender (deep cobalt -> electric sky blue -> icy lavender)
+        cyan: [
+          [0.00, [65, 45, 145]],
+          [0.32, [105, 130, 235]],
+          [0.68, [155, 215, 255]],
+          [1.00, [235, 225, 255]]
+        ],
+        // Crimson & Blush (deep ruby -> magenta pink -> warm pearl)
+        crimson: [
+          [0.00, [135, 25, 85]],
+          [0.35, [225, 85, 165]],
+          [0.72, [255, 165, 215]],
+          [1.00, [255, 230, 240]]
+        ],
+        // Golden Hour (warm amber -> peach -> luminous cream)
+        gold: [
+          [0.00, [165, 65, 45]],
+          [0.35, [235, 140, 85]],
+          [0.72, [255, 205, 135]],
+          [1.00, [255, 245, 215]]
+        ]
+      };
+
+      // Stems & leaves emerald palette
+      const STEM_PALETTE = [
+        [0.00, [26, 82, 42]],
+        [0.45, [52, 138, 72]],
+        [1.00, [110, 205, 118]]
+      ];
+
+      // Simulation & Interaction State
+      const state = {
+        paletteMode: 'mixed',
+        windSpeed: 1.0,
+        bloomMultiplier: 1.0,
+        density: 'medium', // 'fine' | 'medium' | 'retro'
+        rotX: 0.14,
+        rotY: 0.0,
+        targetRotX: 0.14,
+        targetRotY: 0.0,
+        zoom: 1.0,
+        targetZoom: 1.0,
+        isDragging: false,
+        lastMouseX: 0,
+        lastMouseY: 0,
+        fadeStartTime: performance.now(),
+        uiVisible: true
+      };
+
+      // Grid dimensions & font metrics
+      let cols = 0;
+      let rows = 0;
+      let cellW = 8;
+      let cellH = 14;
+      let fontSize = 13;
+
+      // Z-Buffer & Framebuffers
+      let zBuffer = new Float32Array(0);
+      let charBuffer = new Uint16Array(0);
+      let colorR = new Uint8Array(0);
+      let colorG = new Uint8Array(0);
+      let colorB = new Uint8Array(0);
+
+      // Background twinkling ASCII stars
+      const STAR_CHARS = ['.', '·', '+', '*', '˙', '✦'];
+      let stars = [];
+
+      function initStars() {
+        stars = [];
+        const count = 95;
+        for (let i = 0; i < count; i++) {
+          stars.push({
+            nx: Math.random(),
+            ny: Math.random(),
+            char: STAR_CHARS[Math.floor(Math.random() * STAR_CHARS.length)],
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.8 + Math.random() * 1.8,
+            baseAlpha: 0.25 + Math.random() * 0.65,
+            tint: Math.random() > 0.7 ? [215, 225, 255] : [255, 220, 245]
+          });
+        }
+      }
+
+      // Resize & configure ASCII cell grid
+      function resizeGrid() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        // Adapt font size based on screen size and selected density
+        const isMobile = width < 640;
+        if (state.density === 'fine') {
+          fontSize = isMobile ? 8 : 10;
+        } else if (state.density === 'retro') {
+          fontSize = isMobile ? 13 : 16;
+        } else {
+          fontSize = isMobile ? 10 : 12.5;
+        }
+
+        cellW = fontSize * 0.62;
+        cellH = fontSize * 1.08;
+
+        cols = Math.max(40, Math.floor(width / cellW));
+        rows = Math.max(25, Math.floor(height / cellH));
+
+        const totalCells = cols * rows;
+        zBuffer = new Float32Array(totalCells);
+        charBuffer = new Uint16Array(totalCells);
+        colorR = new Uint8Array(totalCells);
+        colorG = new Uint8Array(totalCells);
+        colorB = new Uint8Array(totalCells);
+      }
+
+      // Interpolate color along a palette stops array
+      function samplePalette(palette, t) {
+        if (t <= palette[0][0]) return palette[0][1];
+        const last = palette[palette.length - 1];
+        if (t >= last[0]) return last[1];
+
+        for (let i = 0; i < palette.length - 1; i++) {
+          const [t0, c0] = palette[i];
+          const [t1, c1] = palette[i + 1];
+          if (t >= t0 && t <= t1) {
+            const f = (t - t0) / (t1 - t0);
+            return [
+              c0[0] + (c1[0] - c0[0]) * f,
+              c0[1] + (c1[1] - c0[1]) * f,
+              c0[2] + (c1[2] - c0[2]) * f
+            ];
+          }
+        }
+        return last[1];
+      }
+
+      // Bouquet Definition: 6 lilies arranged harmoniously with varied heights, angles, and palettes
+      const BOUQUET = [
+        // Center-top hero violet lily
+        {
+          head: [0.02, 1.32, 0.15],
+          base: [0.00, -1.65, -0.10],
+          ctrl: [-0.08, -0.10, 0.05],
+          scale: 1.08,
+          rot: [0.22, 0.05, -0.06],
+          phase: 0.0,
+          bloom: 1.02,
+          defaultPalette: 'violet',
+          leaves: [
+            { tStart: 0.25, angle: 0.4, len: 1.15, width: 0.16, droop: 0.45 },
+            { tStart: 0.48, angle: 3.4, len: 0.95, width: 0.14, droop: 0.38 }
+          ]
+        },
+        // Left-upper cyan-lavender lily
+        {
+          head: [-1.05, 0.92, -0.05],
+          base: [-0.12, -1.65, -0.12],
+          ctrl: [-0.62, -0.25, -0.05],
+          scale: 0.98,
+          rot: [0.28, -0.35, 0.42],
+          phase: 1.1,
+          bloom: 0.96,
+          defaultPalette: 'cyan',
+          leaves: [
+            { tStart: 0.32, angle: 2.7, len: 1.10, width: 0.15, droop: 0.50 }
+          ]
+        },
+        // Right-upper rose-violet lily
+        {
+          head: [1.08, 0.88, 0.05],
+          base: [0.12, -1.65, -0.10],
+          ctrl: [0.65, -0.22, 0.02],
+          scale: 1.00,
+          rot: [0.25, 0.38, -0.44],
+          phase: 2.2,
+          bloom: 0.98,
+          defaultPalette: 'violet',
+          leaves: [
+            { tStart: 0.30, angle: -0.3, len: 1.12, width: 0.15, droop: 0.48 }
+          ]
+        },
+        // Lower-left crimson-blush lily
+        {
+          head: [-0.82, -0.05, 0.45],
+          base: [-0.08, -1.65, -0.05],
+          ctrl: [-0.48, -0.82, 0.25],
+          scale: 0.92,
+          rot: [0.48, -0.28, 0.34],
+          phase: 3.3,
+          bloom: 1.05,
+          defaultPalette: 'crimson',
+          leaves: [
+            { tStart: 0.38, angle: 2.2, len: 0.92, width: 0.14, droop: 0.42 }
+          ]
+        },
+        // Lower-right cyan-lavender lily
+        {
+          head: [0.85, -0.08, 0.42],
+          base: [0.08, -1.65, -0.05],
+          ctrl: [0.50, -0.85, 0.22],
+          scale: 0.94,
+          rot: [0.46, 0.32, -0.36],
+          phase: 4.4,
+          bloom: 1.00,
+          defaultPalette: 'cyan',
+          leaves: [
+            { tStart: 0.40, angle: 0.8, len: 0.95, width: 0.14, droop: 0.40 }
+          ]
+        },
+        // Center-front soft rose lily
+        {
+          head: [0.00, 0.28, 0.62],
+          base: [0.00, -1.65, 0.00],
+          ctrl: [0.04, -0.68, 0.38],
+          scale: 0.95,
+          rot: [0.55, 0.02, 0.03],
+          phase: 5.2,
+          bloom: 1.06,
+          defaultPalette: 'crimson',
+          leaves: [
+            { tStart: 0.22, angle: 1.6, len: 1.05, width: 0.15, droop: 0.46 },
+            { tStart: 0.28, angle: 4.7, len: 1.00, width: 0.14, droop: 0.44 }
+          ]
+        }
+      ];
+
+      // 3D Vector Rotation Helpers
+      function transformPoint(x, y, z, rot, scale, center, globalRotX, globalRotY) {
+        // 1. Local scale
+        x *= scale;
+        y *= scale;
+        z *= scale;
+
+        // 2. Local Euler rotations (X -> Y -> Z)
+        const cx = Math.cos(rot[0]), sx = Math.sin(rot[0]);
+        let y1 = y * cx - z * sx;
+        let z1 = y * sx + z * cx;
+        y = y1; z = z1;
+
+        const cy = Math.cos(rot[1]), sy = Math.sin(rot[1]);
+        let x2 = x * cy + z * sy;
+        let z2 = -x * sy + z * cy;
+        x = x2; z = z2;
+
+        const cz = Math.cos(rot[2]), sz = Math.sin(rot[2]);
+        let x3 = x * cz - y * sz;
+        let y3 = x * sz + y * cz;
+        x = x3; y = y3;
+
+        // 3. Translate to flower head position
+        x += center[0];
+        y += center[1];
+        z += center[2];
+
+        // 4. Global camera orbit rotation (Y then X)
+        const gcy = Math.cos(globalRotY), gsy = Math.sin(globalRotY);
+        const gx1 = x * gcy + z * gsy;
+        const gz1 = -x * gsy + z * gcy;
+        x = gx1; z = gz1;
+
+        const gcx = Math.cos(globalRotX), gsx = Math.sin(globalRotX);
+        const gy2 = y * gcx - z * gsx;
+        const gz2 = y * gsx + z * gcx;
+        y = gy2; z = gz2;
+
+        return [x, y, z];
+      }
+
+      function transformWorldPoint(x, y, z, globalRotX, globalRotY) {
+        const gcy = Math.cos(globalRotY), gsy = Math.sin(globalRotY);
+        const gx1 = x * gcy + z * gsy;
+        const gz1 = -x * gsy + z * gcy;
+        x = gx1; z = gz1;
+
+        const gcx = Math.cos(globalRotX), gsx = Math.sin(globalRotX);
+        const gy2 = y * gcx - z * gsx;
+        const gz2 = y * gsx + z * gcx;
+        y = gy2; z = gz2;
+
+        return [x, y, z];
+      }
+
+      // Light direction (normalized)
+      const LX = -0.32, LY = 0.68, LZ = 0.66;
+
+      // Project & plot a single 3D surface sample into the ASCII Z-buffer
+      function plotPoint(wx, wy, wz, nx, ny, nz, r, g, b, focal, brightnessBoost) {
+        const camDist = 6.2 / state.zoom;
+        const relZ = camDist - wz;
+        if (relZ <= 0.35) return;
+
+        const invZ = focal / relZ;
+        // Aspect ratio correction so circles look circular in monospace characters
+        const aspect = cellH / cellW;
+        const px = Math.round(cols * 0.5 + wx * invZ * aspect);
+        const py = Math.round(rows * 0.47 - wy * invZ);
+
+        if (px < 0 || px >= cols || py < 0 || py >= rows) return;
+
+        const idx = py * cols + px;
+        if (wz > zBuffer[idx]) {
+          zBuffer[idx] = wz;
+
+          // Normalize surface normal
+          const nLen = Math.hypot(nx, ny, nz) || 1;
+          const nnx = nx / nLen, nny = ny / nLen, nnz = nz / nLen;
+
+          // Two-sided diffuse + rim highlight lighting
+          const dot = Math.abs(nnx * LX + nny * LY + nnz * LZ);
+          const rim = Math.pow(1.0 - Math.abs(nnz), 1.8) * 0.45;
+          const lum = Math.min(1.0, (0.28 + 0.72 * dot + rim) * brightnessBoost);
+
+          // Map luminance to ASCII character ramp
+          const charIdx = Math.min(RAMP_LEN - 1, Math.max(1, Math.floor(lum * (RAMP_LEN - 1))));
+          charBuffer[idx] = charIdx;
+
+          // Modulate RGB slightly by lighting so shadows have rich depth
+          const shade = 0.52 + 0.58 * lum;
+          colorR[idx] = Math.min(255, r * shade);
+          colorG[idx] = Math.min(255, g * shade);
+          colorB[idx] = Math.min(255, b * shade);
+        }
+      }
+
+      // Evaluate a single petal point in local lily coordinates
+      function evalPetalLocal(angle, u, v, bloomVal) {
+        const spread = (0.28 + 1.08 * bloomVal) * u;
+        const sinPiU = Math.sin(Math.PI * u);
+        const width = 0.31 * Math.pow(Math.max(0, sinPiU), 0.74) * (1.0 - 0.56 * u);
+        const ridge = 0.11 * sinPiU;
+        const curlU = Math.max(0, u - 0.58);
+        const curl = 0.34 * Math.pow(curlU, 2.3);
+        const v2 = v * v;
+
+        const height = ridge * (1.0 - v2) - 0.13 * v2 * sinPiU - curl + 0.025 * Math.sin(3.0 * Math.PI * u) * v2;
+        const radial = spread;
+        const lateral = width * v;
+
+        const ca = Math.cos(angle);
+        const sa = Math.sin(angle);
+
+        // Local lily coordinates: Y is up along flower axis, X/Z are radial
+        const lx = radial * ca - lateral * sa;
+        const lz = radial * sa + lateral * ca;
+        const ly = height - 0.18 * u * u;
+
+        return [lx, ly, lz];
+      }
+
+      // Render a complete parametric Lily flower head (6 petals + 6 glowing stamens)
+      function renderLily(lily, t, swayX, swayZ, globalRotX, globalRotY, focal) {
+        const activePaletteKey = state.paletteMode === 'mixed' ? lily.defaultPalette : state.paletteMode;
+        const palette = PALETTES[activePaletteKey] || PALETTES.violet;
+
+        const dynamicBloom = (lily.bloom * state.bloomMultiplier) + 0.08 * Math.sin(0.85 * t + lily.phase);
+        const headCenter = [
+          lily.head[0] + swayX,
+          lily.head[1] - 0.03 * Math.abs(swayX),
+          lily.head[2] + swayZ
+        ];
+        const headRot = [
+          lily.rot[0] + swayZ * 0.22,
+          lily.rot[1] + swayX * 0.15,
+          lily.rot[2] - swayX * 0.24
+        ];
+
+        // Adaptive grid resolution based on screen density
+        const uSteps = state.density === 'fine' ? 42 : (state.density === 'retro' ? 26 : 34);
+        const vSteps = state.density === 'fine' ? 18 : (state.density === 'retro' ? 11 : 14);
+        const eps = 0.015;
+
+        // 1. Render 6 Petals (arranged in 2 slightly offset whorls of 3)
+        for (let p = 0; p < 6; p++) {
+          const isInner = p % 2 === 1;
+          const baseAngle = (p * Math.PI) / 3 + (isInner ? 0.04 : 0);
+          const petalScale = lily.scale * (isInner ? 0.94 : 1.0);
+
+          for (let iu = 0; iu <= uSteps; iu++) {
+            const u = 0.02 + (iu / uSteps) * 0.97;
+            const [pr, pg, pb] = samplePalette(palette, u);
+
+            for (let iv = 0; iv <= vSteps; iv++) {
+              const v = -1.0 + (iv / vSteps) * 2.0;
+
+              const [lx, ly, lz] = evalPetalLocal(baseAngle, u, v, dynamicBloom);
+              // Finite differences for crisp surface normals
+              const [lux, luy, luz] = evalPetalLocal(baseAngle, Math.min(1, u + eps), v, dynamicBloom);
+              const [lvx, lvy, lvz] = evalPetalLocal(baseAngle, u, Math.min(1, v + eps), dynamicBloom);
+
+              const dux = lux - lx, duy = luy - ly, duz = luz - lz;
+              const dvx = lvx - lx, dvy = lvy - ly, dvz = lvz - lz;
+
+              // Cross product du x dv for surface normal
+              const lnx = duy * dvz - duz * dvy;
+              const lny = duz * dvx - dux * dvz;
+              const lnz = dux * dvy - duy * dvx;
+
+              const [wx, wy, wz] = transformPoint(lx, ly, lz, headRot, petalScale, headCenter, globalRotX, globalRotY);
+              const [wnx, wny, wnz] = transformPoint(lnx, lny, lnz, headRot, 1.0, [0, 0, 0], globalRotX, globalRotY);
+
+              // Subtle botanical freckles on inner lower half of petals (like in the video)
+              let r = pr, g = pg, b = pb;
+              if (u > 0.15 && u < 0.56 && Math.abs(v) < 0.58) {
+                const spotWave = Math.sin(u * 48.0 + p * 2.1) * Math.cos(v * 26.0 - p * 1.7);
+                if (spotWave > 0.74) {
+                  r *= 0.42;
+                  g *= 0.28;
+                  b *= 0.48;
+                }
+              }
+
+              plotPoint(wx, wy, wz, wnx, wny, wnz, r, g, b, focal, isInner ? 1.08 : 1.0);
+            }
+          }
+        }
+
+        // 2. Render Central Pistil + 6 Golden Stamens with Glowing Anthers
+        const stamenCount = 6;
+        const stamenSteps = 14;
+        for (let s = 0; s < stamenCount; s++) {
+          const ang = (s * Math.PI * 2) / stamenCount + 0.25;
+          const ca = Math.cos(ang);
+          const sa = Math.sin(ang);
+
+          for (let k = 0; k <= stamenSteps; k++) {
+            const st = k / stamenSteps;
+            const rad = 0.04 + 0.26 * Math.pow(st, 1.35) * (0.85 + 0.15 * dynamicBloom);
+            const h = 0.52 * st - 0.10 * st * st;
+
+            const lx = rad * ca;
+            const lz = rad * sa;
+            const ly = h;
+
+            const [wx, wy, wz] = transformPoint(lx, ly, lz, headRot, lily.scale, headCenter, globalRotX, globalRotY);
+
+            // Filament transitions from pale mint-cream to glowing golden-amber anther tip
+            if (st > 0.82) {
+              // Glowing Anther Tip (draw small cluster for visibility)
+              plotPoint(wx, wy, wz, 0, 1, 0.5, 255, 215, 75, focal, 1.35);
+              plotPoint(wx + 0.018, wy, wz, 0, 1, 0.5, 255, 190, 55, focal, 1.25);
+            } else {
+              plotPoint(wx, wy, wz, 0, 1, 0.5, 225, 235, 155, focal, 1.05);
+            }
+          }
+        }
+      }
+
+      // Evaluate quadratic Bezier point for curved stems
+      function evalBezier(p0, p1, p2, t) {
+        const inv = 1 - t;
+        return [
+          inv * inv * p0[0] + 2 * inv * t * p1[0] + t * t * p2[0],
+          inv * inv * p0[1] + 2 * inv * t * p1[1] + t * t * p2[1],
+          inv * inv * p0[2] + 2 * inv * t * p1[2] + t * t * p2[2]
+        ];
+      }
+
+      // Render curved stem and slender foliage leaves for each lily
+      function renderStemAndLeaves(lily, swayX, swayZ, globalRotX, globalRotY, focal) {
+        const base = lily.base;
+        const ctrl = [
+          lily.ctrl[0] + swayX * 0.45,
+          lily.ctrl[1],
+          lily.ctrl[2] + swayZ * 0.45
+        ];
+        const top = [
+          lily.head[0] + swayX,
+          lily.head[1] - 0.04,
+          lily.head[2] + swayZ
+        ];
+
+        const stemSteps = 52;
+        const radialSteps = 6;
+
+        for (let i = 0; i <= stemSteps; i++) {
+          const u = i / stemSteps;
+          const pos = evalBezier(base, ctrl, top, u);
+          const [sr, sg, sb] = samplePalette(STEM_PALETTE, u * 0.85);
+          const radius = 0.032 * (1.0 - 0.35 * u);
+
+          for (let r = 0; r < radialSteps; r++) {
+            const theta = (r / radialSteps) * Math.PI * 2;
+            const nx = Math.cos(theta);
+            const nz = Math.sin(theta);
+            const [wx, wy, wz] = transformWorldPoint(
+              pos[0] + nx * radius,
+              pos[1],
+              pos[2] + nz * radius,
+              globalRotX,
+              globalRotY
+            );
+            const [wnx, wny, wnz] = transformWorldPoint(nx, 0.2, nz, globalRotX, globalRotY);
+            plotPoint(wx, wy, wz, wnx, wny, wnz, sr, sg, sb, focal, 0.95);
+          }
+        }
+
+        // Render slender lily leaves branching from the stem
+        if (!lily.leaves) return;
+        for (const leaf of lily.leaves) {
+          const origin = evalBezier(base, ctrl, top, leaf.tStart);
+          const ca = Math.cos(leaf.angle);
+          const sa = Math.sin(leaf.angle);
+
+          const luSteps = 22;
+          const lvSteps = 7;
+
+          for (let iu = 0; iu <= luSteps; iu++) {
+            const u = iu / luSteps;
+            const [lr, lg, lb] = samplePalette(STEM_PALETTE, 0.2 + 0.8 * u);
+            const wHalf = leaf.width * Math.sin(Math.PI * Math.pow(u, 0.72));
+
+            // Leaf arches outward and gracefully droops at the tip
+            const dist = leaf.len * u;
+            const archY = 0.36 * Math.sin(Math.PI * u * 0.75) - leaf.droop * u * u;
+
+            for (let iv = 0; iv <= lvSteps; iv++) {
+              const v = -1.0 + (iv / lvSteps) * 2.0;
+              const lat = wHalf * v;
+              const foldY = -0.025 * v * v;
+
+              const px = origin[0] + dist * ca - lat * sa;
+              const py = origin[1] + archY + foldY;
+              const pz = origin[2] + dist * sa + lat * ca;
+
+              const [wx, wy, wz] = transformWorldPoint(px, py, pz, globalRotX, globalRotY);
+              const [wnx, wny, wnz] = transformWorldPoint(-sa * v * 0.4, 1.0, ca * v * 0.4, globalRotX, globalRotY);
+              plotPoint(wx, wy, wz, wnx, wny, wnz, lr, lg, lb, focal, 1.02);
+            }
+          }
+        }
+      }
+
+      // Main Render Loop
+      let lastFrameTime = performance.now();
+      let frameCount = 0;
+      const fpsBadge = document.getElementById('fps-badge');
+
+      function render(now) {
+        requestAnimationFrame(render);
+
+        // FPS counter update
+        frameCount++;
+        if (now - lastFrameTime >= 600) {
+          const fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
+          if (fpsBadge) fpsBadge.textContent = `${fps} FPS`;
+          frameCount = 0;
+          lastFrameTime = now;
+        }
+
+        const elapsed = now * 0.001;
+        const fadeElapsed = (now - state.fadeStartTime) * 0.001;
+        // Smooth cinematic fade-in on load/replay
+        const globalAlpha = Math.min(1.0, Math.max(0.0, fadeElapsed / 1.6));
+
+        // Smooth camera damping + gentle idle breathing orbit
+        if (!state.isDragging) {
+          state.targetRotY += 0.0016 * state.windSpeed;
+        }
+        state.rotX += (state.targetRotX - state.rotX) * 0.08;
+        state.rotY += (state.targetRotY - state.rotY) * 0.08;
+        state.zoom += (state.targetZoom - state.zoom) * 0.1;
+
+        // Clear ASCII buffers
+        zBuffer.fill(-9999);
+        charBuffer.fill(0);
+
+        // Pure black void background
+        ctx.fillStyle = '#000000';
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+        ctx.font = `600 ${fontSize}px "JetBrains Mono", monospace`;
+        ctx.textBaseline = 'top';
+
+        // 1. Draw subtle twinkling background ASCII stars
+        for (let i = 0; i < stars.length; i++) {
+          const s = stars[i];
+          const twinkle = 0.5 + 0.5 * Math.sin(elapsed * s.speed + s.phase);
+          const alpha = s.baseAlpha * (0.25 + 0.75 * twinkle) * globalAlpha;
+          if (alpha > 0.05) {
+            const sx = ((s.nx + state.rotY * 0.04) % 1 + 1) % 1 * window.innerWidth;
+            const sy = s.ny * window.innerHeight;
+            ctx.fillStyle = `rgba(${s.tint[0]}, ${s.tint[1]}, ${s.tint[2]}, ${alpha.toFixed(3)})`;
+            ctx.fillText(s.char, sx, sy);
+          }
+        }
+
+        // 2. Compute perspective focal length based on viewport
+        const minDim = Math.min(cols, rows * (cellH / cellW));
+        const focal = minDim * 1.48;
+
+        // 3. Render all lilies (stems, leaves, petals, stamens) into Z-buffer
+        for (let i = 0; i < BOUQUET.length; i++) {
+          const lily = BOUQUET[i];
+          const windPhase = elapsed * 1.15 * state.windSpeed + lily.phase * 0.7;
+          const swayX = Math.sin(windPhase) * 0.085 * state.windSpeed;
+          const swayZ = Math.cos(windPhase * 0.82) * 0.065 * state.windSpeed;
+
+          renderStemAndLeaves(lily, swayX, swayZ, state.rotX, state.rotY, focal);
+          renderLily(lily, elapsed * state.windSpeed, swayX, swayZ, state.rotX, state.rotY, focal);
+        }
+
+        // 4. Flush ASCII Z-buffer to high-DPI canvas
+        ctx.globalAlpha = globalAlpha;
+        for (let r = 0; r < rows; r++) {
+          const rowOffset = r * cols;
+          const py = r * cellH;
+          for (let c = 0; c < cols; c++) {
+            const idx = rowOffset + c;
+            const chIdx = charBuffer[idx];
+            if (chIdx > 0) {
+              ctx.fillStyle = `rgb(${colorR[idx]},${colorG[idx]},${colorB[idx]})`;
+              ctx.fillText(RAMP[chIdx], c * cellW, py);
+            }
+          }
+        }
+        ctx.globalAlpha = 1.0;
+      }
+
+      // Pointer / Touch Drag Orbit Controls
+      canvas.addEventListener('pointerdown', (e) => {
+        state.isDragging = true;
+        state.lastMouseX = e.clientX;
+        state.lastMouseY = e.clientY;
+        canvas.setPointerCapture(e.pointerId);
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (!state.isDragging) return;
+        const dx = e.clientX - state.lastMouseX;
+        const dy = e.clientY - state.lastMouseY;
+        state.lastMouseX = e.clientX;
+        state.lastMouseY = e.clientY;
+
+        state.targetRotY += dx * 0.0075;
+        state.targetRotX = Math.max(-0.85, Math.min(1.05, state.targetRotX + dy * 0.0065));
+      });
+
+      const stopDrag = (e) => {
+        state.isDragging = false;
+        if (e && e.pointerId !== undefined) {
+          try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+      };
+      canvas.addEventListener('pointerup', stopDrag);
+      canvas.addEventListener('pointercancel', stopDrag);
+
+      // Mouse Wheel Zoom
+      canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY * -0.001;
+        state.targetZoom = Math.max(0.55, Math.min(2.1, state.targetZoom + delta));
+      }, { passive: false });
+
+      // Pinch-to-Zoom for Mobile Touch
+      let initialPinchDist = null;
+      let initialZoom = 1.0;
+      canvas.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          initialPinchDist = Math.hypot(dx, dy);
+          initialZoom = state.targetZoom;
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchmove', (e) => {
+        if (e.touches.length === 2 && initialPinchDist) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          const dist = Math.hypot(dx, dy);
+          const ratio = dist / initialPinchDist;
+          state.targetZoom = Math.max(0.55, Math.min(2.1, initialZoom * ratio));
+        }
+      }, { passive: true });
+
+      canvas.addEventListener('touchend', () => {
+        initialPinchDist = null;
+      });
+
+      // UI Controls Wiring
+      document.querySelectorAll('.palette-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.palette-btn').forEach((b) => {
+            b.classList.remove('active', 'bg-white/15', 'text-white', 'border-pink-400/50', 'shadow-[0_0_12px_rgba(240,155,210,0.25)]');
+            b.classList.add('bg-white/5', 'text-white/70', 'border-transparent');
+          });
+          btn.classList.add('active', 'bg-white/15', 'text-white', 'border-pink-400/50', 'shadow-[0_0_12px_rgba(240,155,210,0.25)]');
+          btn.classList.remove('bg-white/5', 'text-white/70', 'border-transparent');
+          state.paletteMode = btn.dataset.palette;
+        });
+      });
+
+      const windSlider = document.getElementById('wind-slider');
+      const windVal = document.getElementById('wind-val');
+      windSlider.addEventListener('input', (e) => {
+        state.windSpeed = parseFloat(e.target.value);
+        windVal.textContent = `${state.windSpeed.toFixed(1)}x`;
+      });
+
+      const bloomSlider = document.getElementById('bloom-slider');
+      const bloomVal = document.getElementById('bloom-val');
+      bloomSlider.addEventListener('input', (e) => {
+        state.bloomMultiplier = parseFloat(e.target.value);
+        bloomVal.textContent = `${Math.round(state.bloomMultiplier * 100)}%`;
+      });
+
+      document.querySelectorAll('.density-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.density-btn').forEach((b) => {
+            b.classList.remove('active', 'bg-white/20', 'text-white', 'border', 'border-white/25');
+            b.classList.add('bg-white/5', 'text-white/65');
+          });
+          btn.classList.add('active', 'bg-white/20', 'text-white', 'border', 'border-white/25');
+          btn.classList.remove('bg-white/5', 'text-white/65');
+          state.density = btn.dataset.density;
+          resizeGrid();
+        });
+      });
+
+      // Replay Fade-in Button
+      document.getElementById('btn-replay').addEventListener('click', () => {
+        state.fadeStartTime = performance.now();
+      });
+
+      // Toggle UI Visibility (Clean Full-Screen Mode)
+      const bottomControls = document.getElementById('bottom-controls');
+      document.getElementById('btn-toggle-ui').addEventListener('click', () => {
+        state.uiVisible = !state.uiVisible;
+        if (state.uiVisible) {
+          bottomControls.style.opacity = '1';
+          bottomControls.style.pointerEvents = 'auto';
+          bottomControls.style.transform = 'translate(-50%, 0)';
+        } else {
+          bottomControls.style.opacity = '0';
+          bottomControls.style.pointerEvents = 'none';
+          bottomControls.style.transform = 'translate(-50%, 24px)';
+        }
+      });
+
+      // Code / Formula Modal Controls
+      const codeModal = document.getElementById('code-modal');
+      document.getElementById('btn-code').addEventListener('click', () => {
+        codeModal.classList.remove('hidden');
+        codeModal.classList.add('flex');
+      });
+      const closeModal = () => {
+        codeModal.classList.add('hidden');
+        codeModal.classList.remove('flex');
+      };
+      document.getElementById('btn-close-modal').addEventListener('click', closeModal);
+      document.getElementById('btn-close-modal-2').addEventListener('click', closeModal);
+      codeModal.addEventListener('click', (e) => {
+        if (e.target === codeModal) closeModal();
+      });
+
+      // Initialize & Start
+      window.addEventListener('resize', resizeGrid);
+      window.onload = function () {
+        initStars();
+        resizeGrid();
+        state.fadeStartTime = performance.now();
+        requestAnimationFrame(render);
+      };
+    })();
+  </script>
+</body>
+</html>
